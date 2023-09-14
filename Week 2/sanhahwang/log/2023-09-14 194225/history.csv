@@ -1,0 +1,2 @@
+step,x,y,reward,done,action
+0,1,2,0,True,3
