@@ -1,0 +1,235 @@
+%%capture
+%matplotlib inline
+import numpy as np
+import pickle
+import tools
+num_spaces = 3
+num_prices = 3
+env = tools.ParkingWorld(num_spaces, num_prices)
+V = np.zeros(num_spaces + 1)
+pi = np.ones((num_spaces + 1, num_prices)) / num_prices
+#The value function is a one-dimensional array where the $i$-th entry gives the value of $i$ spaces being occupied.
+V
+
+state = 0
+V[state]
+
+state = 0
+value = 10
+V[state] = value
+V
+for s, v in enumerate(V):
+    print(f'State {s} has value {v}')
+pi
+state = 0
+pi[state]
+state = 0
+action = 1
+pi[state, action]
+pi[state] = np.array([0.75, 0.21, 0.04])
+pi
+for s, pi_s in enumerate(pi):
+    print(f''.join(f'pi(A={a}|S={s}) = {p.round(2)}' + 4 * ' ' for a, p in enumerate(pi_s)))
+tools.plot(V, pi)
+env.S
+env.A
+
+""" You will need to use the environment's `transitions` method to complete this assignment. The method takes a state and an action and returns a 2-dimensional array, where the entry at $(i, 0)$ is the reward for transitioning to state $i$ from the current state and the entry at $(i, 1)$ is the conditional probability of transitioning to state $i$ given the current state and action."""
+
+state = 3
+action = 1
+transitions = env.transitions(state, action)
+transitions
+for s_, (r, p) in enumerate(transitions):
+    print(f'p(S\'={s_}, R={r} | S={state}, A={action}) = {p.round(2)}')
+
+""" ## Section 1: Policy Evaluation
+
+You're now ready to begin the assignment! First, the city council would like you to evaluate the quality of the existing pricing scheme. Policy evaluation works by iteratively applying the Bellman equation for $v_{\pi}$ to a working value function, as an update rule, as shown below.
+
+$$\large v(s) \leftarrow \sum_a \pi(a | s) \sum_{s', r} p(s', r | s, a)[r + \gamma v(s')]$$
+This update can either occur "in-place" (i.e. the update rule is sequentially applied to each state) or with "two-arrays" (i.e. the update rule is simultaneously applied to each state). Both versions converge to $v_{\pi}$ but the in-place version usually converges faster. **In this assignment, we will be implementing all update rules in-place**, as is done in the pseudocode of chapter 4 of the textbook. 
+
+We have written an outline of the policy evaluation algorithm described in chapter 4.1 of the textbook. It is left to you to fill in the `bellman_update` function to complete the algorithm."""
+
+def evaluate_policy(env, V, pi, gamma, theta):
+    while True:
+        delta = 0
+        for s in env.S:
+            v = V[s]
+            bellman_update(env, V, pi, s, gamma)
+            delta = max(delta, abs(v - V[s]))
+        if delta < theta:
+            break
+    return V
+
+# [Graded]
+def bellman_update(env, V, pi, s, gamma):
+    """Mutate ``V`` according to the Bellman update equation."""
+    ### START CODE HERE ###
+    # environment, value function representing the expected return, policy(explain probability of taking each action in each state),
+    # current state,discount factor- influences importance of future rewards
+    # Initialize the updated value for state s
+    updated_v = 0
+    
+    # Iterate over all possible actions
+    for a in env.A:
+        a_prob = pi[s][a]  # Probability of taking action a in state s from the policy pi
+        transitions = env.transitions(s, a) # transition- information about the next state,reward and probability of transitioning
+        # Initialize the sum of expected returns for the next state s'
+
+        # Iterate over all possible next states s'
+        for s_prime in env.S:
+            # reward and transition probability- bc of transitioning to s' with a in s
+            reward = transitions[s_prime,0]
+            prob = transitions[s_prime, 1]
+            updated_v += a_prob * prob * (reward + gamma * V[s_prime]) # expected return
+
+        # Update the updated value for state s using the current action
+
+    # Update the value function for state s
+    V[s] = updated_v 
+
+    ### END CODE HERE ###
+
+    
+# The cell below uses the policy evaluation algorithm to evaluate the city's policy, which charges a constant price of one.
+
+%reset_selective -f "^num_spaces$|^num_prices$|^env$|^V$|^pi$|^gamma$|^theta$"
+num_spaces = 10
+num_prices = 4
+env = tools.ParkingWorld(num_spaces, num_prices)
+V = np.zeros(num_spaces + 1)
+city_policy = np.zeros((num_spaces + 1, num_prices))
+city_policy[:, 1] = 1
+gamma = 0.9
+theta = 0.1
+V = evaluate_policy(env, V, city_policy, gamma, theta)
+
+# You can use the ``plot`` function to visualize the final value function and policy.
+tools.plot(V, city_policy)
+
+## Test Code for bellman_update() ## 
+with open('section1', 'rb') as handle:
+    V_correct = pickle.load(handle)
+np.testing.assert_array_almost_equal(V, V_correct)
+
+## Section 2: Policy Iteration
+"""Now the city council would like you to compute a more efficient policy using policy iteration. Policy iteration works by alternating between evaluating the existing policy and making the policy greedy with respect to the existing value function. We have written an outline of the policy iteration algorithm described in chapter 4.3 of the textbook. We will make use of the policy evaluation algorithm you completed in section 1. It is left to you to fill in the `q_greedify_policy` function, such that it modifies the policy at $s$ to be greedy with respect to the q-values at $s$, to complete the policy improvement algorithm."""
+
+def improve_policy(env, V, pi, gamma):
+    policy_stable = True
+    for s in env.S:
+        old = pi[s].copy()
+        q_greedify_policy(env, V, pi, s, gamma)
+        if not np.array_equal(pi[s], old):
+            policy_stable = False
+    return pi, policy_stable
+
+def policy_iteration(env, gamma, theta):
+    V = np.zeros(len(env.S))
+    pi = np.ones((len(env.S), len(env.A))) / len(env.A)
+    policy_stable = False
+    while not policy_stable:
+        V = evaluate_policy(env, V, pi, gamma, theta)
+        pi, policy_stable = improve_policy(env, V, pi, gamma)
+    return V, pi
+
+# [Graded]
+
+def q_greedify_policy(env, V, pi, s, gamma): #purpose: mutate pi to be greedy wrt the q values induced by v
+    """Mutate ``pi`` to be greedy with respect to the q-values induced by ``V``."""
+    ### START CODE HERE ###
+   
+    A = np.zeros(len(env.A)) # initialize an array for each action.
+
+    # Calculate the action values for each action
+    for action in env.A:
+        transitions = env.transitions(s, action) # infn about the next state
+        for next_state in env.S: #possible next states 
+            reward = transitions[next_state, 0]
+            prob = transitions[next_state, 1]
+            A[action] += prob * (reward + gamma * V[next_state]) # expected action value for the current action
+
+    # Find the best action (the one with the highest action value)
+    best_action = np.argmax(A)
+
+    # Update the policy to be greedy wrt the best action
+    pi[s] = np.eye(len(env.A))[best_action]
+
+
+
+    ### END CODE HERE ###
+
+    # When you are ready to test the policy iteration algorithm, run the cell below.
+
+    %reset_selective -f "^num_spaces$|^num_prices$|^env$|^V$|^pi$|^gamma$|^theta$"
+    env = tools.ParkingWorld(num_spaces=10, num_prices=4)
+    gamma = 0.9
+    theta = 0.1
+    V, pi = policy_iteration(env, gamma, theta)
+
+    # You can use the ``plot`` function to visualize the final value function and policy.
+    tools.plot(V, pi)
+
+## Section 3: Value Iteration
+"""The city has also heard about value iteration and would like you to implement it. Value iteration works by iteratively applying the Bellman optimality equation for $v_{\ast}$ to a working value function, as an update rule, as shown below.
+
+$$\large v(s) \leftarrow \max_a \sum_{s', r} p(s', r | s, a)[r + \gamma v(s')]$$
+We have written an outline of the value iteration algorithm described in chapter 4.4 of the textbook. It is left to you to fill in the `bellman_optimality_update` function to complete the value iteration algorithm."""
+
+def value_iteration(env, gamma, theta):
+    V = np.zeros(len(env.S))
+    while True:
+        delta = 0
+        for s in env.S:
+            v = V[s]
+            bellman_optimality_update(env, V, s, gamma)
+            delta = max(delta, abs(v - V[s]))
+        if delta < theta:
+            break
+    pi = np.ones((len(env.S), len(env.A))) / len(env.A)
+    for s in env.S:
+        q_greedify_policy(env, V, pi, s, gamma)
+    return V, pi
+
+def bellman_optimality_update(env, V, s, gamma):
+    """Mutate ``V`` according to the Bellman optimality update equation."""
+    ### START CODE HERE ###
+    v = np.zeros(len(env.A))
+    for action in env.A: 
+        transitions = env.transitions(s, action)
+        for next_state in env.S:
+            #reward and transition probability
+            reward = transitions[next_state, 0]
+            prob = transitions[next_state, 1]
+            v[action] += prob * (reward + gamma * V[next_state]) 
+            #expected action value: the above two + discounted future value of next state(gamma * ...)
+    V[s] = np.max(v) #now this is the max expected return from state s ff optimal policy.
+
+
+  ### END CODE HERE ###
+
+
+    # When you are ready to test the value iteration algorithm, run the cell below.
+    %reset_selective -f "^num_spaces$|^num_prices$|^env$|^V$|^pi$|^gamma$|^theta$"
+    env = tools.ParkingWorld(num_spaces=10, num_prices=4)
+    gamma = 0.9
+    theta = 0.1
+    V, pi = value_iteration(env, gamma, theta)
+
+""" In the value iteration algorithm above, a policy is not explicitly maintained until the value function has converged. Below, we have written an identically behaving value iteration algorithm that maintains an updated policy. Writing value iteration in this form makes its relationship to policy iteration more evident. Policy iteration alternates between doing complete greedifications and complete evaluations. On the other hand, value iteration alternates between doing local greedifications and local evaluations. """
+
+    def value_iteration2(env, gamma, theta):
+    V = np.zeros(len(env.S))
+    pi = np.ones((len(env.S), len(env.A))) / len(env.A)
+    while True:
+        delta = 0
+        for s in env.S:
+            v = V[s]
+            q_greedify_policy(env, V, pi, s, gamma)
+            bellman_update(env, V, pi, s, gamma)
+            delta = max(delta, abs(v - V[s]))
+        if delta < theta:
+            break
+    return V, pi
